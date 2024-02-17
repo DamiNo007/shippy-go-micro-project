@@ -1,0 +1,109 @@
+version: '3.1'
+
+services:
+  broker:
+    image: nats
+    ports:
+      - 4222:4222
+    networks:
+      - shipping-project-network
+  
+  datastore:
+    image: mongo:4
+    ports:
+      - 27017:27017
+    networks:
+      - shipping-project-network
+  
+  database:
+    image: postgres
+    ports:
+      - 5432:5432
+    networks:
+      - shipping-project-network
+    environment:
+      POSTGRES_PASSWORD: "postgres"
+  
+  email-service:
+    build:
+      context: ./
+      dockerfile: ./email-service/Dockerfile
+    ports:
+      - 50054:50051
+    networks:
+      - shipping-project-network
+    depends_on:
+      - broker
+    environment:
+      BROKER_HOST: "broker:4222"
+
+  vessel-service:
+    build:
+      context: ./
+      dockerfile: ./vessel-service/Dockerfile
+    ports:
+      - 50052:50051
+    networks:
+      - shipping-project-network
+    depends_on:
+      - datastore
+    environment:
+      DB_HOST: "datastore:27017"
+  
+  user-service:
+    build:
+      context: ./
+      dockerfile: ./user-service/Dockerfile
+    ports:
+      - 50053:50051
+    networks:
+      - shipping-project-network
+    depends_on:
+      - database
+      - broker
+    environment:
+      DB_NAME: "postgres"
+      DB_HOST: "database"
+      DB_PORT: "5432"
+      DB_USER: "postgres"
+      DB_PASSWORD: "postgres"
+      BROKER_HOST: "broker:4222"
+  
+  user-cli:
+    build:
+      context: ./
+      dockerfile: ./user-cli/Dockerfile
+    networks:
+      - shipping-project-network
+    depends_on:
+      - user-service
+
+  consignment-service:
+    build:
+      context: ./
+      dockerfile: ./consignment-service/Dockerfile
+    ports:
+      - 50051:50051
+    networks:
+      - shipping-project-network
+    depends_on:
+      - vessel-service
+      - user-service
+      - datastore
+    environment:
+      DB_HOST: "datastore:27017"
+
+  consignment-cli:
+    build:
+      context: ./
+      dockerfile: ./consignment-cli/Dockerfile
+    networks:
+      - shipping-project-network
+    depends_on:
+      - consignment-service
+    environment:
+      TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VyIjp7ImlkIjoiNjdlNjM3YzctNTA3ZC00YTE1LWEzY2QtNGFiYjE4MjcwOTdmIiwibmFtZSI6IkpvaG4iLCJjb21wYW55IjoiR29vZ2xlIiwiZW1haWwiOiJqb2huMDA3QGdtYWlsLmNvbSIsInBhc3N3b3JkIjoiJDJhJDEwJFFadkFFdTBNLmNrV0J3aWk5RUdDdXVLM3BrSktEVzl3TlQ0cWd2eVU2YWdVT1VxNndZc2RDIn0sImV4cCI6MTcwODIzMzY2NSwiaXNzIjoiZ28ubWljcm8uc3J2LnVzZXIifQ.8ZjgFHpNUvIyoQCIPjUJMFhl6LqQNopYPKYm6Mm9U0g"
+      
+networks:
+  shipping-project-network:
+
